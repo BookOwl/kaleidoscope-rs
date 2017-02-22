@@ -1,3 +1,5 @@
+extern crate kaleidoscope;
+
 fn main() {
-    println!("Hello, world!");
+
 }
