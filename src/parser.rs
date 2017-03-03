@@ -131,7 +131,6 @@ impl<'a> Parser<'a> {
     }
     fn parse_bin_op_rhs(&mut self, prec: u32, mut lhs: Box<Expr>) -> Result<Box<Expr>, String> {
         loop {
-            println!("lhs: {:?}", lhs);
             let op = match self.current {
                 Some(lexer::Token::UnknownChar(c)) => c,
                 _ => return Ok(lhs),
@@ -147,13 +146,11 @@ impl<'a> Parser<'a> {
                 Some(lexer::Token::UnknownChar(c)) => token_precedence(c),
                 _ => None,
             };
-            println!("rhs {:?}", &rhs);
             match next_prec {
                 Some(n) if tok_prec < n => rhs = self.parse_bin_op_rhs(tok_prec + 1, rhs)?,
                 //None => rhs = self.parse_bin_op_rhs(tok_prec + 1, rhs)?,
                 _ => (),
             };
-            println!("rhs {:?}", &rhs);
             lhs = Box::new(Expr::Binary {
                 op: op,
                 lhs: lhs,
