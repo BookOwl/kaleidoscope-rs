@@ -4,3 +4,4 @@ extern crate llvm;
 pub mod lexer;
 pub mod parser;
 pub mod codegen;
+pub mod jit;

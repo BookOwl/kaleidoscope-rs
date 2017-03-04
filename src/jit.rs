@@ -6,18 +6,27 @@ use parser;
 use lexer::Token;
 use codegen;
 
-pub fn run() {
+pub fn run(opt_level: usize) {
     let context = Context::new();
     let module = Module::new("my jit", &context);
     let engine = JitEngine::new(&module, JitOptions {
-        opt_level: 0,
+        opt_level: opt_level,
     }).unwrap();
     loop {
         let builder = Builder::new(&context);
         let mut input = String::new();
         print!("> ", );
         stdout().flush();
-        stdin().read_line(&mut input).unwrap();
+        match stdin().read_line(&mut input) {
+            Ok(_) => (),
+            Err(_) => break,
+        }
+        if input.trim_left() == "" {
+            continue;
+        }
+        if input == "exit\n" {
+            break;
+        }
         let mut parser = parser::Parser::from_source(&input);
         match parser.current {
             Some(Token::Define) => {
@@ -43,15 +52,11 @@ pub fn run() {
             // Top level expression
             _ => {
                 let expr = parser.parse_top_level_expr().unwrap();
-                let new_module = Module::new("new", &context);
-                //new_module.link(&module);
-                println!("1", );
+                let new_module = module.clone();
                 let func = codegen::generate_function(&expr, &builder, &new_module, &context).unwrap();
-                println!("2", );
                 engine.add_module(&new_module);
-                engine.with_function(&func, |t: extern fn(_) -> f64| {
-                    println!("{}", t(0.0));
-                });
+                let res = engine.run_function(&func, &[]);
+                println!("{}", f64::from_generic(&res, &context));
                 engine.remove_module(&new_module);
             }
         }
