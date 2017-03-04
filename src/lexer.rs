@@ -14,6 +14,10 @@ pub enum Token {
     // Commands
     Define,
     Extern,
+    // The if, then, and else keywords.
+    If,
+    Then,
+    Else,
     /// An Identifier contains the identifier as a String.
     /// This is much safer and easier to manage than using global variables.
     Identifier(String),
@@ -76,6 +80,12 @@ impl<'a> Iterator for Lexer<'a> {
                     Some(Token::Define)
                 } else if identifier == "extern" {
                     Some(Token::Extern)
+                } else if identifier == "if" {
+                    Some(Token::If)
+                } else if identifier == "then" {
+                    Some(Token::Then)
+                } else if identifier == "else" {
+                    Some(Token::Else)
                 } else {
                     Some(Token::Identifier(identifier))
                 }
