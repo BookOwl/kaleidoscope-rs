@@ -6,7 +6,7 @@ use parser;
 use llvm::Function;
 
 
-fn generate_expression<'a, 'b>(node: &'b Expr,
+pub fn generate_expression<'a, 'b>(node: &'b Expr,
                                values: &'a HashMap<&String, &'a Arg>,
                                builder: &'a CSemiBox<'a, Builder>,
                                module: &'a CSemiBox<'a, Module>,
@@ -46,7 +46,7 @@ fn generate_expression<'a, 'b>(node: &'b Expr,
         }
     }
 }
-fn generate_prototype<'a>(prototype: &Prototype,
+pub fn generate_prototype<'a>(prototype: &Prototype,
                           module: &'a CSemiBox<'a, Module>,
                           context: &'a CBox<Context>) -> Result<&'a Function, String> {
     let arg_types = vec![Type::get::<f64>(&context); prototype.args.len()];
@@ -57,7 +57,7 @@ fn generate_prototype<'a>(prototype: &Prototype,
     }
     Ok(func)
 }
-fn generate_function<'a>(function_ast: &parser::Function,
+pub fn generate_function<'a>(function_ast: &parser::Function,
                          builder: &'a CSemiBox<'a, Builder>,
                          module: &'a CSemiBox<'a, Module>,
                          context: &'a CBox<Context>) -> Result<&'a Function, String> {
@@ -89,6 +89,16 @@ mod tests {
     fn test_codegen() {
         let mut parser = parser::Parser::from_source("def foo(a) a + a");
         let ast = parser.parse_definition().unwrap();
+        let ctx = Context::new();
+        let builder = Builder::new(&ctx);
+        let module = Module::new("test", &ctx);
+        let func = generate_function(&ast, &builder, &module, &ctx).unwrap();
+        module.write_bitcode("test.bitcode").unwrap();
+    }
+    #[test]
+    fn test_toplevel_codegen() {
+        let mut parser = parser::Parser::from_source("1 + 1");
+        let ast = parser.parse_top_level_expr().unwrap();
         let ctx = Context::new();
         let builder = Builder::new(&ctx);
         let module = Module::new("test", &ctx);

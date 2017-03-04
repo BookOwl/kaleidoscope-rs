@@ -49,7 +49,7 @@ impl Function {
 #[derive(Debug)]
 pub struct Parser<'a> {
     lexer: lexer::Lexer<'a>,
-    current: Option<lexer::Token>,
+    pub current: Option<lexer::Token>,
 }
 impl<'a> Parser<'a> {
     pub fn from_source(source: &'a str) -> Parser<'a> {
@@ -195,7 +195,7 @@ impl<'a> Parser<'a> {
     }
     pub fn parse_top_level_expr(&mut self) -> Result<Function, String> {
         let expr = self.parse_expression()?;
-        let proto = Prototype::new(String::from(""), Vec::new());
+        let proto = Prototype::new(String::from("__top_level_expr"), Vec::new());
         Ok(Function::new(proto, expr))
     }
 }
