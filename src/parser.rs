@@ -14,6 +14,11 @@ pub enum Expr {
     Call {
         name: String,
         args: Vec<Box<Expr>>,
+    },
+    IfElse {
+        pred: Box<Expr>,
+        if_clause: Box<Expr>,
+        else_clause: Box<Expr>,
     }
 }
 
@@ -115,17 +120,35 @@ impl<'a> Parser<'a> {
             Ok(Box::new(Expr::Variable(id.clone())))
         }
     }
+    fn parse_if_expression(&mut self) -> Result<Box<Expr>, String> {
+        self.get_next_token();
+        let cond = self.parse_expression()?;
+        match self.current {
+            Some(lexer::Token::Then) => (),
+            _ => return Err(format!("Expected then, found {:?}", self.current))
+        };
+        let if_clause = self.parse_expression()?;
+        match self.current {
+            Some(lexer::Token::Else) => (),
+            _ => return Err(format!("Expected else, found {:?}", self.current))
+        };
+        let else_clause = self.parse_expression()?;
+        Box::new(Expr::IfElse {
+            cond: cond,
+            if_clause: if_clause,
+            else_clause: else_clause,
+        })
+    }
     fn parse_primary(&mut self) -> Result<Box<Expr>, String> {
-
         match self.current {
             Some(lexer::Token::Identifier(_)) => self.parse_identifier_expr(),
             Some(lexer::Token::Number(_)) => self.parse_number(),
             Some(lexer::Token::UnknownChar('(')) => self.parse_paren_expr(),
+            Some(lexer::Token::If) => self.parse_if_expression(),
             _ => Err(format!("Unknown token {:?} when expecting an expression", self.current))
         }
     }
     fn parse_expression(&mut self) -> Result<Box<Expr>, String> {
-
         let lhs = self.parse_primary()?;
         self.parse_bin_op_rhs(0, lhs)
     }
