@@ -122,22 +122,24 @@ impl<'a> Parser<'a> {
     }
     fn parse_if_expression(&mut self) -> Result<Box<Expr>, String> {
         self.get_next_token();
-        let cond = self.parse_expression()?;
+        let pred = self.parse_expression()?;
         match self.current {
             Some(lexer::Token::Then) => (),
             _ => return Err(format!("Expected then, found {:?}", self.current))
         };
+        self.get_next_token();
         let if_clause = self.parse_expression()?;
         match self.current {
             Some(lexer::Token::Else) => (),
             _ => return Err(format!("Expected else, found {:?}", self.current))
         };
+        self.get_next_token();
         let else_clause = self.parse_expression()?;
-        Box::new(Expr::IfElse {
-            cond: cond,
+        Ok(Box::new(Expr::IfElse {
+            pred: pred,
             if_clause: if_clause,
             else_clause: else_clause,
-        })
+        }))
     }
     fn parse_primary(&mut self) -> Result<Box<Expr>, String> {
         match self.current {
@@ -227,6 +229,7 @@ fn token_precedence(tok: char) -> Option<u32> {
     match tok {
         '+' | '-' => Some(20),
         '<' => Some(10),
+        '>' => Some(10),
         '*' => Some(40),
         _ => None,
     }
@@ -261,6 +264,13 @@ mod tests {
             op: '+',
             lhs: Box::new(Expr::Number(1.0)),
             rhs: Box::new(Expr::Number(1.0)),
+        }));
+        let mut parser = Parser::from_source("1 > 0");
+        let ast = parser.parse_expression().unwrap();
+        assert_eq!(ast, Box::new(Expr::Binary {
+            op: '>',
+            lhs: Box::new(Expr::Number(1.0)),
+            rhs: Box::new(Expr::Number(0.0)),
         }))
     }
     #[test]
@@ -315,6 +325,29 @@ mod tests {
         let mut parser = Parser::from_source("extern sin(a)");
         let got = parser.parse_extern().unwrap();
         let expected = Prototype::new(String::from("sin"), vec![String::from("a")]);
+        assert_eq!(got, expected);
+    }
+    #[test]
+    fn test_if_parsing() {
+        let mut parser = Parser::from_source("if a then b else c");
+        let got = parser.parse_expression().unwrap();
+        let expected = Box::new(Expr::IfElse {
+            pred: Box::new(Expr::Variable(String::from("a"))),
+            if_clause: Box::new(Expr::Variable(String::from("b"))),
+            else_clause: Box::new(Expr::Variable(String::from("c"))),
+        });
+        assert_eq!(got, expected);
+        let mut parser = Parser::from_source("if a > 0 then b else c");
+        let got = parser.parse_expression().unwrap();
+        let expected = Box::new(Expr::IfElse {
+            pred: Box::new(Expr::Binary {
+                op: '>',
+                lhs: Box::new(Expr::Variable(String::from("a"))),
+                rhs: Box::new(Expr::Number(0.0))
+            }),
+            if_clause: Box::new(Expr::Variable(String::from("b"))),
+            else_clause: Box::new(Expr::Variable(String::from("c"))),
+        });
         assert_eq!(got, expected);
     }
 }

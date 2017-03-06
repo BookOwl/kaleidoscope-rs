@@ -1,31 +1,43 @@
 use std::collections::HashMap;
 use llvm::*;
 use llvm::Attribute::*;
+use llvm_sys::prelude::LLVMBasicBlockRef;
+use llvm_sys;
 use parser::*;
 use parser;
 use llvm::Function;
-
+use std::convert::From;
+use std::mem;
 
 pub fn generate_expression<'a, 'b>(node: &'b Expr,
-                               values: &'a HashMap<&String, &'a Arg>,
-                               builder: &'a CSemiBox<'a, Builder>,
-                               module: &'a CSemiBox<'a, Module>,
-                               context: &'a CBox<Context>) -> Result<&'a Value, String> {
+                                   values: &'a HashMap<&String, &'a Arg>,
+                                   builder: &'a CSemiBox<'a, Builder>,
+                                   module: &'a CSemiBox<'a, Module>,
+                                   context: &'a CBox<Context>,
+                                   func: &'a Function,
+                                  ) -> Result<&'a Value, String> {
     match *node {
         Expr::Number(n) => Ok(n.compile(&context)),
         Expr::Variable(ref v) => Ok(values.get(v).ok_or(
                                 format!("There is no variable named {}", v))?
                             ),
         Expr::Binary {op, ref lhs, ref rhs} => {
-            let l = generate_expression(&*lhs, &values, &builder, &module, &context)?;
-            let r = generate_expression(&*rhs, &values, &builder, &module, &context)?;
+            let l = generate_expression(&*lhs, &values, &builder, &module, &context, &func)?;
+            let r = generate_expression(&*rhs, &values, &builder, &module, &context, &func)?;
             match op {
                 '+' => Ok(builder.build_add(&l, &r)),
                 '-' => Ok(builder.build_sub(&l, &r)),
                 '*' => Ok(builder.build_mul(&l, &r)),
                 '<' => {
                     let comp = builder.build_cmp(&l, &r, Predicate::LessThan);
-                    let res = builder.build_bit_cast(&comp, &Type::get::<f64>(&context));
+                    let res = builder.build_si_to_fp(&comp, &Type::get::<f64>(&context));
+                    let res = builder.build_mul(&res, (-1.0).compile(&context));
+                    Ok(res)
+                },
+                '>' => {
+                    let comp = builder.build_cmp(&l, &r, Predicate::GreaterThan);
+                    let res = builder.build_si_to_fp(&comp, &Type::get::<f64>(&context));
+                    let res = builder.build_mul(&res, (-1.0).compile(&context));
                     Ok(res)
                 }
                 _ => return Err(format!("{} is an invalid operator!", op))
@@ -40,9 +52,30 @@ pub fn generate_expression<'a, 'b>(node: &'b Expr,
             }
             let mut passed = Vec::new();
             for arg in args {
-                passed.push(generate_expression(&arg, &values, &builder, &module, &context)?)
+                passed.push(generate_expression(&arg, &values, &builder, &module, &context, &func)?)
             }
             Ok(builder.build_call(&func, &passed))
+        },
+        Expr::IfElse {ref pred, ref if_clause, ref else_clause} => {
+            let cond = generate_expression(&pred, &values, &builder, &module, &context, &func)?;
+            let cmp = builder.build_cmp(cond, 1.0.compile(&context), Predicate::Equal);
+            let then_block = func.append("then");
+            let else_block = func.append("else");
+            let merge_block = func.append("merge");
+            builder.build_cond_br(&cmp, &then_block, &else_block);
+            builder.position_at_end(&then_block);
+            let then_val = generate_expression(&if_clause, &values, &builder, &module, &context, &func)?;
+            builder.build_br(&merge_block);
+            // Ugly hack needed because llvm-alt doesn't support Builder::get_current_block. X_X
+            let then_block: &mut BasicBlock = unsafe { From::from(llvm_sys::core::LLVMGetInsertBlock(builder.as_ptr())) };
+            builder.position_at_end(&else_block);
+            let else_val = generate_expression(&else_clause, &values, &builder, &module, &context, &func)?;
+            builder.build_br(&merge_block);
+            // Ditto
+            let else_block: &mut BasicBlock = unsafe { From::from(llvm_sys::core::LLVMGetInsertBlock(builder.as_ptr())) };
+            builder.position_at_end(&merge_block);
+            let res = builder.build_phi(Type::get::<f64>(&context), &[(&then_val, then_block), (&else_val, else_block)]);
+            Ok(res)
         }
     }
 }
@@ -74,7 +107,8 @@ pub fn generate_function<'a>(function_ast: &parser::Function,
         values.insert(name, &func[i]);
     }
     let ret = generate_expression(&function_ast.body, &values,
-                                       &builder, &module, &context)?;
+                                  &builder, &module, &context,
+                                  &func)?;
     builder.build_ret(ret);
     module.verify().unwrap();
     Ok(func)
